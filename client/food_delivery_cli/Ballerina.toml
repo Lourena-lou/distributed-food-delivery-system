@@ -1,0 +1,8 @@
+[package]
+org = "chilw"
+name = "food_delivery_cli"
+version = "0.1.0"
+distribution = "2201.12.9"
+
+[build-options]
+observabilityIncluded = false

@@ -1,0 +1,6 @@
+[container.image]
+name = "food-delivery-customer-service"
+tag = "0.1.0"
+
+[settings]
+buildImage = true

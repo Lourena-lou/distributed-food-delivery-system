@@ -1,0 +1,6 @@
+# Copy this file to a service package as Config.toml before starting that service.
+# Keep real credentials out of source control; Config.toml is ignored by Git.
+databaseBackend = "mongodb"
+mongodbConnectionUri = "mongodb://food_delivery:change-me@localhost:27017/?authSource=admin"
+mongodbDatabase = "food_delivery"
+

@@ -1,0 +1,8 @@
+# Copy this file to Config.toml only when the services use non-default URLs.
+customerServiceUrl = "http://localhost:9101"
+restaurantServiceUrl = "http://localhost:9102"
+orderServiceUrl = "http://localhost:9103"
+paymentServiceUrl = "http://localhost:9104"
+deliveryServiceUrl = "http://localhost:9105"
+notificationServiceUrl = "http://localhost:9106"
+adminServiceUrl = "http://localhost:9107"

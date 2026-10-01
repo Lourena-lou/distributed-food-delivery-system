@@ -1,0 +1,155 @@
+name: food-delivery-mongodb
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  networks:
+    - food-delivery-network
+  depends_on:
+    mongodb:
+      condition: service_healthy
+    kafka-init:
+      condition: service_completed_successfully
+
+x-mongodb-environment: &mongodb-environment
+  BAL_CONFIG_DATA: |
+    databaseBackend = "mongodb"
+    mongodbConnectionUri = "mongodb://${MONGODB_APP_USERNAME:-food_delivery}:${MONGODB_APP_PASSWORD:?Set MONGODB_APP_PASSWORD in docker/.env}@mongodb:27017/?authSource=food_delivery"
+    mongodbDatabase = "food_delivery"
+
+x-mongodb-event-environment: &mongodb-event-environment
+  BAL_CONFIG_DATA: |
+    databaseBackend = "mongodb"
+    mongodbConnectionUri = "mongodb://${MONGODB_APP_USERNAME:-food_delivery}:${MONGODB_APP_PASSWORD:?Set MONGODB_APP_PASSWORD in docker/.env}@mongodb:27017/?authSource=food_delivery"
+    mongodbDatabase = "food_delivery"
+    kafkaEnabled = true
+    kafkaBootstrapServers = "kafka:19092"
+
+services:
+  kafka:
+    image: apache/kafka:3.9.2
+    restart: unless-stopped
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: CONTROLLER://:9093,PLAINTEXT://:19092,PLAINTEXT_HOST://:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:19092,PLAINTEXT_HOST://localhost:${KAFKA_PORT:-9092}
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+    ports:
+      - "${KAFKA_PORT:-9092}:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:19092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 20s
+    networks:
+      - food-delivery-network
+
+  kafka-init:
+    image: apache/kafka:3.9.2
+    restart: "no"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./kafka/create-topics.sh:/opt/food-delivery/create-topics.sh:ro
+    command: ["/bin/bash", "/opt/food-delivery/create-topics.sh"]
+    networks:
+      - food-delivery-network
+
+  mongodb:
+    image: mongo:8.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_ROOT_USERNAME:-food_delivery_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_ROOT_PASSWORD:?Set MONGODB_ROOT_PASSWORD in docker/.env}
+      MONGODB_APP_USERNAME: ${MONGODB_APP_USERNAME:-food_delivery}
+      MONGODB_APP_PASSWORD: ${MONGODB_APP_PASSWORD:?Set MONGODB_APP_PASSWORD in docker/.env}
+    ports:
+      - "${MONGODB_PORT:-27017}:27017"
+    volumes:
+      - mongodb-data:/data/db
+      - ../database/mongodb/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --username \"$${MONGO_INITDB_ROOT_USERNAME}\" --password \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin --eval \"quit(db.adminCommand('ping').ok ? 0 : 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - food-delivery-network
+
+  customer-service:
+    <<: *service-defaults
+    image: food-delivery-customer-service:0.1.0
+    environment:
+      <<: *mongodb-environment
+    ports:
+      - "9101:9101"
+
+  restaurant-service:
+    <<: *service-defaults
+    image: food-delivery-restaurant-service:0.1.0
+    environment:
+      <<: *mongodb-environment
+    ports:
+      - "9102:9102"
+
+  order-service:
+    <<: *service-defaults
+    image: food-delivery-order-service:0.1.0
+    environment:
+      <<: *mongodb-event-environment
+    ports:
+      - "9103:9103"
+
+  payment-service:
+    <<: *service-defaults
+    image: food-delivery-payment-service:0.1.0
+    environment:
+      <<: *mongodb-event-environment
+    ports:
+      - "9104:9104"
+
+  delivery-service:
+    <<: *service-defaults
+    image: food-delivery-delivery-service:0.1.0
+    environment:
+      <<: *mongodb-event-environment
+    ports:
+      - "9105:9105"
+
+  notification-service:
+    <<: *service-defaults
+    image: food-delivery-notification-service:0.1.0
+    environment:
+      <<: *mongodb-event-environment
+    ports:
+      - "9106:9106"
+
+  admin-service:
+    <<: *service-defaults
+    image: food-delivery-admin-service:0.1.0
+    environment:
+      <<: *mongodb-environment
+    ports:
+      - "9107:9107"
+
+volumes:
+  mongodb-data:
+  kafka-data:
+
+networks:
+  food-delivery-network:
+    driver: bridge
