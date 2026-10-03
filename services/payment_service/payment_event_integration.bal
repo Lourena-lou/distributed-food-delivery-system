@@ -1,3 +1,25 @@
+// ============================================================
+// PAYMENT EVENT INTEGRATION
+// Kafka chain: Order service -> PAYMENT -> Delivery service
+//
+// LISTENS TO:  orders.created   (published by the Order service)
+//   Message contains: orderId, customerId, totalAmount
+//   Action: creates ONE payment row with status PENDING.
+//   The id is "payment-<orderId>", so a repeated message never
+//   creates a duplicate (idempotent). The offset is committed
+//   only after the row is saved, so a crash means the message is
+//   redelivered, not lost.
+//
+// PUBLISHES TO: payments.completed or payments.failed
+//   Triggered when a payment is decided through
+//   POST /payments/{id}/process (a simulated gateway decision).
+//   Message contains the full payment record; the order id is the
+//   Kafka key so events for one order stay in order.
+//
+// WHY EVENT-DRIVEN: if this service is down, the Order service
+// keeps accepting orders. The events wait in Kafka and are
+// processed when we recover.
+// ============================================================
 import ballerina/log;
 import ballerina/uuid;
 import ballerinax/kafka;
